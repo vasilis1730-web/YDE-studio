@@ -1,4 +1,4 @@
-/* ΥΔΕ Studio v5.1.0 — engineering core (boots via startApp after auth) */
+/* ΥΔΕ Studio v5.2.0 — engineering core (boots via startApp after auth) */
 
 /* ==== 01_data.js ==== */
 /* ===========================================================
@@ -45,9 +45,27 @@ const K_GROUP={1:1.00,2:0.80,3:0.70,4:0.65,5:0.60,6:0.57,7:0.54,8:0.52,9:0.50};
 const MCB=[6,10,13,16,20,25,32,40,50,63,80,100,125,160,200,250];
 const CURVES={B:{k:5,lbl:'B (5×In) — φωτισμός, ωμικά, μεγάλα μήκη'},C:{k:10,lbl:'C (10×In) — γενική χρήση, μικρά επαγωγικά'},D:{k:20,lbl:'D (20×In) — μετασχηματιστές, κινητήρες'}};
 const RCD_I=[10,30,100,300,500];
-const RHO_CU=0.0225;      /* Ω·mm²/m στους 20°C */
-const RHO_CU_H=0.0275;    /* θερμό, για βρόχο σφάλματος (~70°C) */
+/* Ειδική αντίσταση χαλκού.
+   ρ₂₀ = 0,0178 Ω·mm²/m. Για υπολογισμούς σε συνθήκες λειτουργίας χρησιμοποιείται
+   η τιμή στους ~70 °C: ρ = 1,25·ρ₂₀ ≈ 0,0225 Ω·mm²/m (CENELEC/IEC — πτώση τάσης).
+   Για τον βρόχο σφάλματος ο αγωγός θεωρείται ακόμη θερμότερος. */
+const RHO_CU_20=0.0178;   /* Ω·mm²/m στους 20 °C */
+const RHO_CU=0.0225;      /* Ω·mm²/m στους ~70 °C — πτώση τάσης */
+const RHO_CU_H=0.0275;    /* Ω·mm²/m θερμός αγωγός — βρόχος σφάλματος */
 const U0=230, UL=400;
+
+/* Συστήματα γείωσης (ΕΛΟΤ HD 384 / IEC 60364-1 §312.2) */
+const EARTH_SYS={
+ 'TN-C-S':{lbl:'TN-C-S — ουδετέρωση, διαχωρισμός PEN στον κύριο ζυγό',
+   fault:'Το ρεύμα σφάλματος επιστρέφει μεταλλικά μέσω PE/PEN· η αποσύνδεση εξασφαλίζεται από τον μικροαυτόματο (Zs ≤ U₀/Ia). Οι ΔΔΕ επιτρέπονται μόνο κατάντη του σημείου διαχωρισμού PEN.',
+   target:2},
+ 'TN-S':{lbl:'TN-S — χωριστοί αγωγοί PE και N σε όλο το μήκος',
+   fault:'Όπως στο TN-C-S, με πλήρη διαχωρισμό PE/N από την παροχή.',
+   target:2},
+ 'TT':{lbl:'TT — αυτόνομη γείωση εγκατάστασης',
+   fault:'Το ρεύμα σφάλματος κλείνει μέσω γης (R_A+R_B)· η αποσύνδεση εξασφαλίζεται υποχρεωτικά από ΔΔΕ με R_A·I∆n ≤ 50 V.',
+   target:null}
+};
 
 /* Βιβλιοθήκη φορτίων ανά τύπο χώρου */
 const LOADS={
@@ -173,7 +191,7 @@ const DB=(()=>{
 function blank(){return{
   v:'5.0.0', id:uid(), created:today(), modified:today(),
   route:{mode:null,cat:null,btype:null,insp:null,reason:''},
-  prj:{title:'',addr:'',num:'',tk:'',dimos:'Ρόδου',ke:'',paroxi:'',metritis:'',useKind:''},
+  prj:{title:'',addr:'',num:'',tk:'',dimos:'Ρόδου',ke:'',paroxi:'',metritis:'',useKind:'',earth:'TN-C-S'},
   sup:{tier:'',oldTier:'',method:'C',amb:30,group:1,agreed:0},
   inst:{ep:'',on:'',pat:'',adeia:'',omada:'Α΄',bathm:'1ης',addr:'',tk:'',tel:'',email:'',afm:'',doy:''},
   org:{brand:'',model:'',serial:'',cert:'',cdate:'',cexp:''},
@@ -181,10 +199,21 @@ function blank(){return{
   usr:{nm:'',addr:'',tel:'',same:true},
   fop:{name:'ΠΙΛΑΡ ΦΟΠ',lines:[],spare:false,dUlim:5,astro:true,photo:true,spd:true,rcdHead:300,earth:''},
   pan:[], /* πίνακες κτιρίου */
-  meas:{ins:[],zs:[],rcd:[],cont:[],earth:'',earthLim:'',vis:{},filled:false,confirmed:false,cdate:'',
-        note:''},
+  meas:{ins:[],zs:[],rcd:[],cont:[],earth:'',earthLim:'',vis:{},filled:false,confirmed:false,cdate:'',note:''},
   doc:{issue:today(),cat:'kino',next:'',kind:'new',remarks:''}
 };}
+
+/* Συγχώνευση παλιού αποθηκευμένου έργου με το τρέχον σχήμα, ώστε νέα πεδία
+   να μη λείπουν από έργα που σώθηκαν με προηγούμενη έκδοση. */
+function migrate(o){
+  if(!o||typeof o!=='object')return blank();
+  const b=blank(), out=Object.assign({},b,o);
+  ['route','prj','sup','inst','org','own','usr','fop','meas','doc'].forEach(k=>{
+    out[k]=Object.assign({},b[k],o[k]||{});
+  });
+  if(!EARTH_SYS[out.prj.earth])out.prj.earth='TN-C-S';
+  return out;
+}
 var S=blank();
 var VIEW='start', PANEL_OPEN=null, MODAL=null;
 
@@ -256,7 +285,7 @@ function exportJSON(){
 function importJSON(){
   const i=document.createElement('input');i.type='file';i.accept='.json';
   i.onchange=()=>{const f=i.files[0];if(!f)return;const r=new FileReader();
-    r.onload=()=>{try{const o=JSON.parse(r.result);S=Object.assign(blank(),o);go('start');save();}
+    r.onload=()=>{try{const o=JSON.parse(r.result);S=migrate(o);go('start');save();}
       catch(e){alert('Το αρχείο δεν διαβάζεται.');}};r.readAsText(f);};
   i.click();
 }
@@ -300,17 +329,35 @@ function du(IB,L,S_,ph,cosf){
   const v=(ph===3?Math.sqrt(3):2)*IB*L*z;
   return{V:v,pct:v/(ph===3?UL:U0)*100};
 }
-/* Πτώση τάσης κατανεμημένου φορτίου (ΦΟΠ): άθροισμα τμημάτων */
+/* Πτώση τάσης κατανεμημένου φορτίου (ΦΟΠ).
+   Τα φωτιστικά είναι ΜΟΝΟΦΑΣΙΚΑ 230 V και συνδέονται εναλλάξ L1→L2→L3.
+   Υπολογίζεται η πτώση φάσης–ουδετέρου ανά φάση: στα ισοφορτισμένα τμήματα
+   ο ουδέτερος δεν άγει, ενώ στην ουρά της γραμμής (όπου απομένουν 1–2 φωτιστικά)
+   το φορτίο είναι αμιγώς μονοφασικό και ο ουδέτερος επιστρέφει όλο το ρεύμα.
+   Το ρεύμα ουδετέρου υπολογίζεται από την ανισορροπία και προστίθεται συντηρητικά. */
 function duDistributed(nLamps,wEach,span,first,S_,ph,cosf){
-  const c=cosf||0.95;const z=RHO_CU*c/S_;
-  let v=0;
-  for(let i=1;i<=nLamps;i++){
-    const Ldown=(i===1?first:span);
-    const Pdown=(nLamps-i+1)*wEach/1000;      /* kW κατάντη του τμήματος */
-    const I=ph===3?(Pdown*1000)/(Math.sqrt(3)*UL*c):(Pdown*1000)/(U0*c);
-    v+=(ph===3?Math.sqrt(3):2)*I*Ldown*z;
+  const c=cosf||0.95, z=RHO_CU/S_;
+  if(ph!==3){
+    let v=0;
+    for(let k=1;k<=nLamps;k++){
+      const Lk=(k===1?first:span);
+      const I=((nLamps-k+1)*wEach)/(U0*c);
+      v+=2*I*Lk*z*c;
+    }
+    return{V:v,pct:v/U0*100,perPhase:[v,0,0]};
   }
-  return{V:v,pct:v/(ph===3?UL:U0)*100};
+  const assign=[]; for(let i=1;i<=nLamps;i++)assign.push((i-1)%3);
+  const drop=[0,0,0];
+  for(let k=1;k<=nLamps;k++){
+    const Lk=(k===1?first:span), r=z*Lk;
+    const cnt=[0,0,0];
+    for(let i=k;i<=nLamps;i++)cnt[assign[i-1]]++;
+    const I=cnt.map(n=>n*wEach/(U0*c));
+    const IN=Math.sqrt(Math.max(0,I[0]*I[0]+I[1]*I[1]+I[2]*I[2]-I[0]*I[1]-I[1]*I[2]-I[2]*I[0]));
+    for(let j=0;j<3;j++) if(cnt[j]>0) drop[j]+=r*c*(I[j]+IN);
+  }
+  const v=Math.max(drop[0],drop[1],drop[2]);
+  return{V:v,pct:v/U0*100,perPhase:drop};
 }
 /* Βρόχος σφάλματος & έλεγχος αυτόματης αποσύνδεσης */
 function loop(L,S_,Spe,Zsupply){
@@ -318,7 +365,24 @@ function loop(L,S_,Spe,Zsupply){
   const Ik=U0*0.95/zs;
   return{Zs:zs,Ik:Ik};
 }
-function disconnectOK(Ik,In,curve){return Ik>=In*(CURVES[curve||'C'].k);}
+/* Αυτόματη αποσύνδεση τροφοδοσίας — IEC 60364-4-41 §411.
+   TN : Zs ≤ U₀/Ia μέσω μαγνητικής απόζευξης· εναλλακτικά μέσω ΔΔΕ (κατάντη
+        του διαχωρισμού PEN — σε TN-C δεν επιτρέπεται ΔΔΕ).
+   TT : η αποσύνδεση εξασφαλίζεται ΥΠΟΧΡΕΩΤΙΚΑ από ΔΔΕ (R_A·I∆n ≤ 50 V).
+   Επιστρέφει {ok, via} ώστε η οθόνη να δείχνει ΠΩΣ εξασφαλίζεται, όχι απλώς αν. */
+function discCheck(Ik,In,curve,rcd,sys){
+  const magnetic=Ik>=In*(CURVES[curve||'C'].k);
+  const hasR=!!(rcd&&+rcd>0);
+  if((sys||'TN-C-S')==='TT')
+    return{ok:hasR, via:hasR?'ΔΔΕ '+rcd+' mA':'—', magnetic,
+           why:hasR?'':'Στο σύστημα TT η αποσύνδεση απαιτεί ΔΔΕ — δεν επαρκεί ο μικροαυτόματος.'};
+  if(magnetic)return{ok:true, via:'μικροαυτόματος '+In+'A '+(curve||'C'), magnetic,why:''};
+  if(hasR)return{ok:true, via:'ΔΔΕ '+rcd+' mA', magnetic,
+                 why:'Το I_k δεν επαρκεί για μαγνητική απόζευξη· η αποσύνδεση καλύπτεται από τη ΔΔΕ.'};
+  return{ok:false, via:'—', magnetic,
+         why:'I_k '+nf(Ik,0)+'A < '+(In*CURVES[curve||'C'].k)+'A και δεν υπάρχει ΔΔΕ.'};
+}
+function disconnectOK(Ik,In,curve,rcd,sys){return discCheck(Ik,In,curve,rcd,sys).ok;}
 
 /* Πλήρης διαστασιολόγηση γραμμής */
 function sizeLine(o){
@@ -346,9 +410,11 @@ function sizeLine(o){
   const Spe=S_<=16?S_:(S_<=35?16:S_/2);
   const lp=loop(o.L,S_,Spe,o.Zsup);
   const curve=o.curve||(lp.Ik<In*10?'B':'C');
+  const sys=o.sys||(typeof S!=='undefined'&&S.prj?S.prj.earth:'TN-C-S')||'TN-C-S';
+  const dc=discCheck(lp.Ik,In,curve,o.rcd,sys);
   return{IB,In,S:S_,Spe,Iz,dU:d,Zs:lp.Zs,Ik:lp.Ik,curve,
-    okI:In<=Iz&&IB<=In, okDU:d.pct<=lim, okDisc:disconnectOK(lp.Ik,In,curve),
-    cores:(ph===3?5:3), lim, why};
+    okI:In<=Iz&&IB<=In, okDU:d.pct<=lim, okDisc:dc.ok, discVia:dc.via, discWhy:dc.why, magnetic:dc.magnetic,
+    cores:(ph===3?5:3), lim, why, sys};
 }
 
 /* Πρόταση παροχής ΔΕΔΔΗΕ από συνολικό φορτίο */
@@ -384,7 +450,7 @@ function fopLine(l){
   const L=first+Math.max(0,n-1)*span;
   const r=sizeLine({kW,ph,L,method:l.method||'D',amb:+l.amb||20,grp:+l.grp||1,
     dUlim:+S.fop.dUlim||5,cosf:0.95,minS:+l.minS||6,Sfixed:l.Sfixed?+l.Sfixed:null,curve:'B',
-    distributed:{n,w:w*(aux?1.1:1),span,first},Zsup:0.35});
+    distributed:{n,w:w*(aux?1.1:1),span,first},Zsup:0.35,rcd:l.rcd==null?30:+l.rcd});
   return Object.assign(r,{n,w,span,first,L,kW,ph,name:l.name||'Αναχώρηση'});
 }
 function fopTotals(){
@@ -398,12 +464,14 @@ function fopTotals(){
 function panelById(id){return S.pan.find(p=>p.id===id);}
 function children(id){return S.pan.filter(p=>p.parent===id);}
 function roots(){return S.pan.filter(p=>!p.parent);}
+/* Εγκατεστημένη ισχύς = άθροισμα ονομαστικών ισχύων ΧΩΡΙΣ ετεροχρονισμό.
+   Ζήτηση = (δικές μου γραμμές + ζήτηση υποπινάκων) × συντελεστής του πίνακα. */
 function panelLoad(id){
   const p=panelById(id);if(!p)return{inst:0,dem:0};
-  const inst=p.cir.reduce((a,c)=>a+(+c.kW||0),0);
-  let ch=0;children(id).forEach(k=>{ch+=panelLoad(k.id).dem;});
-  const dem=(inst+ch)*(p.ks||1);
-  return{inst:inst+ch,dem};
+  const own=p.cir.reduce((a,c)=>a+(+c.kW||0),0);
+  let chInst=0,chDem=0;
+  children(id).forEach(k=>{const l=panelLoad(k.id);chInst+=l.inst;chDem+=l.dem;});
+  return{inst:own+chInst, dem:(own+chDem)*(p.ks||1)};
 }
 function totalLoad(){
   let inst=0,dem=0;roots().forEach(r=>{const l=panelLoad(r.id);inst+=l.inst;dem+=l.dem;});
@@ -412,7 +480,7 @@ function totalLoad(){
 function circuitCalc(c,p){
   const ph=+c.ph===3?3:1;
   return sizeLine({kW:+c.kW||0,ph,L:+c.L||15,method:c.method||'B',amb:30,grp:+c.grp||1,
-    dUlim:c.cat==='Φ'?3:5,cosf:0.95,minS:+c.minS||1.5,Sfixed:c.Sfixed?+c.Sfixed:null,curve:c.curve||'C',Zsup:0.4});
+    dUlim:c.cat==='Φ'?3:5,cosf:0.95,minS:+c.minS||1.5,Sfixed:c.Sfixed?+c.Sfixed:null,curve:c.curve||'C',Zsup:0.4,rcd:+c.rcd||0});
 }
 /* Ισοκατανομή φάσεων (round-robin στα μονοφασικά) */
 function balance(p){
@@ -443,6 +511,9 @@ function railHTML(){
   else if(r.cat)items.push({k:'Πίνακες',v:S.pan.length?S.pan.length+' πίνακες':'—',go:'bld',done:S.pan.length>0});
   const p=paroxiById(S.sup.tier);
   items.push({k:'Παροχή',v:p?p.lbl.replace('—','·')+' · '+p.kVA+' kVA':'—',go:'sup',done:!!p});
+  const nSld=r.cat==='fop'?(S.fop.lines.length?1:0):S.pan.length;
+  items.push({k:'Μονογραμμικά',v:nSld?nSld+(nSld===1?' σχέδιο':' σχέδια'):'—',go:'sld',done:nSld>0});
+  items.push({k:'Καρτέλες',v:S.inst.ep?[S.inst.ep,S.inst.on].filter(Boolean).join(' '):'—',go:'cards',done:!!(S.inst.ep&&S.org.serial)});
   items.push({k:'Μετρήσεις',v:S.meas.confirmed?'Επιβεβαιωμένες':(S.meas.filled?'Προσχέδιο':'—'),go:'meas',done:S.meas.confirmed});
   items.push({k:'Έντυπα',v:S.meas.confirmed?'Έτοιμα':'Σε προσχέδιο',go:'docs',done:false});
 
@@ -471,7 +542,7 @@ function shell(inner,navHTML){
   const U=window.YDE_USER||null;
   const ROLE_L={admin:'Διαχειριστής',engineer:'Μηχανικός',viewer:'Προβολή μόνο'};
   return `<div class="topbar">
-    <div class="brand"><b>ΥΔΕ Studio</b><span class="v">v5.1.0</span></div>
+    <div class="brand"><b>ΥΔΕ Studio</b><span class="v">v5.2.0</span></div>
     <span class="sp"></span>
     <button class="tbtn" data-act="newprj">Νέο έργο</button>
     <button class="tbtn" data-act="open">Άνοιγμα</button>
@@ -605,7 +676,11 @@ function vPrj(){
      <div class="f"><label>Αριθμός μετρητή</label><input ${bind('prj.metritis')}></div>
      <div class="f"><label>Κατηγορία χώρου (επανέλεγχος)</label>
        <select ${bind('doc.cat')}>${EPAN.map(e=>`<option value="${e.id}" ${S.doc.cat===e.id?'selected':''}>${e.lbl} — ${e.y} έτ.</option>`).join('')}</select></div>
+     <div class="f wide"><label>Σύστημα γείωσης εγκατάστασης</label>
+       <select ${bind('prj.earth')}>${Object.keys(EARTH_SYS).map(k=>`<option value="${k}" ${(S.prj.earth||'TN-C-S')===k?'selected':''}>${EARTH_SYS[k].lbl}</option>`).join('')}</select>
+       <span class="hint">Καθορίζει τον τρόπο ελέγχου της αυτόματης αποσύνδεσης και τα όρια γείωσης. Επιβεβαιώνεται επιτόπου στο σημείο παροχής.</span></div>
     </div>
+    <div class="note" style="margin-bottom:0"><b>${esc(S.prj.earth||'TN-C-S')}</b>${EARTH_SYS[S.prj.earth||'TN-C-S'].fault}</div>
     <div class="note ok" style="margin-bottom:0"><b>Επόμενος επανέλεγχος</b>
       ${(()=>{const e=EPAN.find(x=>x.id===S.doc.cat)||EPAN[0];return `Με βάση την κατηγορία «${e.lbl}» ο επόμενος έλεγχος οφείλεται έως <b class="mono">${gr(addYears(S.doc.issue,e.y))}</b> (${e.y} έτη από την έκδοση).`;})()}
     </div>
@@ -640,8 +715,8 @@ function vSup(){
       <select ${bind('sup.oldTier')}><option value="">—</option>${PAROXES.map(x=>`<option value="${x.id}" ${S.sup.oldTier===x.id?'selected':''}>${x.lbl} · ${x.kVA} kVA</option>`).join('')}</select></div>`:''}
     <div class="f"><label>Τρόπος όδευσης παροχής</label>
       <select ${bind('sup.method')}>${Object.keys(METHODS).map(m=>`<option value="${m}" ${S.sup.method===m?'selected':''}>${METHODS[m]}</option>`).join('')}</select></div>
-    <div class="f"><label>Θερμοκρασία περιβάλλοντος (°C)</label><input type="number" ${bind('sup.amb','num')} data-live="1"></div>
-    <div class="f"><label>Κυκλώματα σε ομάδα</label><input type="number" min="1" ${bind('sup.group','num')} data-live="1"></div>
+    <div class="f"><label>Θερμοκρασία περιβάλλοντος (°C)</label><input type="text" inputmode="decimal" ${bind('sup.amb','num')} data-live="1"></div>
+    <div class="f"><label>Κυκλώματα σε ομάδα</label><input type="text" inputmode="numeric" ${bind('sup.group','num')} data-live="1"></div>
     <div class="f"><label>Συμφωνημένη ισχύς (kVA)</label><input type="number" ${bind('sup.agreed','num')} placeholder="${p?p.kVA:''}"></div>
    </div>
    ${p?`<div class="reads" style="margin-top:14px">
@@ -734,6 +809,7 @@ function vFop(){
     if(!c.okI)flags.push('<span class="pill bad">I<sub>n</sub>&gt;I<sub>z</sub></span>');
     if(!c.okDU)flags.push(`<span class="pill warn">ΔU ${nf(c.dU.pct,2)}%</span>`);
     if(!c.okDisc)flags.push('<span class="pill bad">αποσύνδεση</span>');
+    else if(!c.magnetic)flags.push('<span class="pill warn">αποσύνδεση μέσω ΔΔΕ</span>');
     if(!flags.length)flags.push('<span class="pill ok">εντάξει</span>');
     return `<div class="card"><h3><span class="n">Λ${i+1}</span>
       <input ${bind('fop.lines.'+i+'.name')} data-live="1" style="border:none;font-weight:700;font-size:13px;background:transparent;width:220px;padding:2px 0">
@@ -741,17 +817,17 @@ function vFop(){
       <button class="btn sm danger" data-delline="${l.id}">Διαγραφή</button></h3>
      <div class="body">
       <div class="grid g5">
-       <div class="f"><label>Φωτιστικά (τεμ.)</label><input type="number" min="1" ${bind('fop.lines.'+i+'.n','num')} data-live="1"></div>
+       <div class="f"><label>Φωτιστικά (τεμ.)</label><input type="text" inputmode="decimal" min="1" ${bind('fop.lines.'+i+'.n','num')} data-live="1"></div>
        <div class="f"><label>Ισχύς ανά φωτιστικό (W)</label>
-         <input type="number" ${bind('fop.lines.'+i+'.w','num')} data-live="1" list="lampw"></div>
-       <div class="f"><label>Απόσταση μεταξύ ιστών (m)</label><input type="number" ${bind('fop.lines.'+i+'.span','num')} data-live="1"></div>
-       <div class="f"><label>Πίλαρ → 1ος ιστός (m)</label><input type="number" ${bind('fop.lines.'+i+'.first','num')} data-live="1"></div>
+         <input type="text" inputmode="decimal" ${bind('fop.lines.'+i+'.w','num')} data-live="1" list="lampw"></div>
+       <div class="f"><label>Απόσταση μεταξύ ιστών (m)</label><input type="text" inputmode="decimal" ${bind('fop.lines.'+i+'.span','num')} data-live="1"></div>
+       <div class="f"><label>Πίλαρ → 1ος ιστός (m)</label><input type="text" inputmode="decimal" ${bind('fop.lines.'+i+'.first','num')} data-live="1"></div>
        <div class="f"><label>Σύνδεση</label><select ${bind('fop.lines.'+i+'.ph')}>
          <option value="3" ${l.ph==='3'?'selected':''}>Τριφασική (εναλλαγή φάσης ανά ιστό)</option>
          <option value="1" ${l.ph==='1'?'selected':''}>Μονοφασική</option></select></div>
        <div class="f"><label>Όδευση</label><select ${bind('fop.lines.'+i+'.method')}>
          ${Object.keys(METHODS).map(m=>`<option value="${m}" ${l.method===m?'selected':''}>${METHODS[m]}</option>`).join('')}</select></div>
-       <div class="f"><label>Θερμ. εδάφους/περιβ. (°C)</label><input type="number" ${bind('fop.lines.'+i+'.amb','num')} data-live="1"></div>
+       <div class="f"><label>Θερμ. εδάφους/περιβ. (°C)</label><input type="text" inputmode="decimal" ${bind('fop.lines.'+i+'.amb','num')} data-live="1"></div>
        <div class="f"><label>Ελάχιστη διατομή (mm²)</label><select ${bind('fop.lines.'+i+'.minS')}>
          ${[4,6,10,16].map(s=>`<option value="${s}" ${+l.minS===s?'selected':''}>${s}</option>`).join('')}</select></div>
        <div class="f"><label>Κλείδωμα διατομής</label><select ${bind('fop.lines.'+i+'.Sfixed')}>
@@ -768,6 +844,7 @@ function vFop(){
        <div class="read"><div class="k">I<sub>z</sub> διορθ.</div><div class="v">${nf(c.Iz,0)}<span class="u"> A</span></div></div>
        <div class="read ${c.okDU?'ok':'warn'}"><div class="k">ΔU άκρου</div><div class="v">${nf(c.dU.pct,2)}<span class="u"> %</span></div></div>
        <div class="read ${c.okDisc?'ok':'bad'}"><div class="k">I<sub>k</sub> άκρου</div><div class="v">${nf(c.Ik,0)}<span class="u"> A</span></div></div>
+       <div class="read ${c.okDisc?(c.magnetic?'ok':'warn'):'bad'}"><div class="k">Αποσύνδεση</div><div class="v" style="font-size:12px">${esc(c.discVia)}</div></div>
       </div>
       <div class="note ${c.okDU&&c.okI&&c.okDisc?'ok':'warn'}" style="margin-bottom:0">
        ${c.n} φωτιστικά × ${c.w} W ανά ${c.span} m ⇒ ${nf(c.L,0)} m. Επιλέχθηκε <b>J1VV ${c.cores}×${c.S} mm²</b>
@@ -785,7 +862,7 @@ function vFop(){
   <div class="card"><h3><span class="n">κεφαλή</span>Εξοπλισμός πίλαρ</h3><div class="body">
    <div class="grid g4">
     <div class="f"><label>Ονομασία πίλαρ</label><input ${bind('fop.name')} data-live="1"></div>
-    <div class="f"><label>Όριο ΔU αναχωρήσεων (%)</label><input type="number" step="0.5" ${bind('fop.dUlim','num')} data-live="1"></div>
+    <div class="f"><label>Όριο ΔU αναχωρήσεων (%)</label><input type="text" inputmode="decimal" step="0.5" ${bind('fop.dUlim','num')} data-live="1"></div>
     <div class="f"><label>ΔΔΕ κεφαλής (mA)</label><select ${bind('fop.rcdHead')}>${[100,300,500].map(x=>`<option value="${x}" ${+S.fop.rcdHead===x?'selected':''}>${x} mA τύπου S</option>`).join('')}</select></div>
     <div class="f"><label>Αντίσταση γείωσης πίλαρ (Ω)</label><input ${bind('fop.earth')} placeholder="μετρημένη"></div>
    </div>
@@ -908,11 +985,12 @@ function panelBlock(p,lvl){
      <div class="grid g4" style="margin-bottom:10px">
        <div class="f"><label>Κωδικός</label><input ${bind('pan.'+idx+'.code')} data-live="1"></div>
        <div class="f"><label>Ονομασία</label><input ${bind('pan.'+idx+'.name')} data-live="1"></div>
-       <div class="f"><label>Συντ. ετεροχρονισμού</label><input type="number" step="0.05" min="0.3" max="1" ${bind('pan.'+idx+'.ks','num')} data-live="1"></div>
-       <div class="f"><label>Μήκος τροφοδοσίας (m)</label><input type="number" ${bind('pan.'+idx+'.feedL','num')} data-live="1"></div>
+       <div class="f"><label>Συντ. ετεροχρονισμού</label><input type="text" inputmode="decimal" step="0.05" min="0.3" max="1" ${bind('pan.'+idx+'.ks','num')} data-live="1"></div>
+       <div class="f"><label>Μήκος τροφοδοσίας (m)</label><input type="text" inputmode="decimal" ${bind('pan.'+idx+'.feedL','num')} data-live="1"></div>
      </div>
      <div class="reads" style="margin-bottom:11px">
       <div class="read"><div class="k">Εγκατεστημένη</div><div class="v">${nf(L.inst,2)}<span class="u"> kW</span></div></div>
+      <div class="read"><div class="k">Ετεροχρονισμός</div><div class="v">${nf(p.ks||1,2)}</div></div>
       <div class="read"><div class="k">Ζήτηση</div><div class="v">${nf(L.dem,2)}<span class="u"> kW</span></div></div>
       <div class="read"><div class="k">Τροφοδοσία</div><div class="v" style="font-size:14px">${feed.cores}×${feed.S}</div></div>
       <div class="read"><div class="k">Γενικός πίνακα</div><div class="v">${feed.In}<span class="u"> A</span></div></div>
@@ -921,20 +999,21 @@ function panelBlock(p,lvl){
      <div class="scroll"><table class="t"><thead><tr>
        <th style="min-width:150px">Γραμμή</th><th class="num">kW</th><th>Φ</th><th class="num">L (m)</th>
        <th>Όδευση</th><th>Φάση</th><th class="num">I<sub>B</sub></th><th>Ασφ.</th><th>Καλώδιο</th>
-       <th class="num">ΔU%</th><th>ΔΔΕ</th><th></th></tr></thead><tbody>
+       <th class="num">ΔU%</th><th>Αποσύνδ.</th><th>ΔΔΕ</th><th></th></tr></thead><tbody>
       ${p.cir.map((c,ci)=>{const r=circuitCalc(c,p);
         const cls=(!r.okI||!r.okDisc)?'style="color:var(--red);font-weight:600"':(!r.okDU?'style="color:var(--amber);font-weight:600"':'');
         return `<tr>
         <td><input ${bind('pan.'+idx+'.cir.'+ci+'.name')} list="lib"></td>
-        <td class="num" style="width:76px"><input type="number" step="0.1" ${bind('pan.'+idx+'.cir.'+ci+'.kW','num')} data-live="1"></td>
+        <td class="num" style="width:76px"><input type="text" inputmode="decimal" step="0.1" ${bind('pan.'+idx+'.cir.'+ci+'.kW','num')} data-live="1"></td>
         <td style="width:62px"><select ${bind('pan.'+idx+'.cir.'+ci+'.ph')}><option value="1" ${+c.ph===1?'selected':''}>1Φ</option><option value="3" ${+c.ph===3?'selected':''}>3Φ</option></select></td>
-        <td class="num" style="width:70px"><input type="number" ${bind('pan.'+idx+'.cir.'+ci+'.L','num')} data-live="1"></td>
+        <td class="num" style="width:70px"><input type="text" inputmode="decimal" ${bind('pan.'+idx+'.cir.'+ci+'.L','num')} data-live="1"></td>
         <td style="width:64px"><select ${bind('pan.'+idx+'.cir.'+ci+'.method')}>${Object.keys(METHODS).map(m=>`<option value="${m}" ${c.method===m?'selected':''}>${m}</option>`).join('')}</select></td>
         <td><span class="ph ${(+c.ph===3?'l1':(c.phase||'L1').toLowerCase())}"></span>${+c.ph===3?'3Φ':(c.phase||'L1')}</td>
         <td class="num">${nf(r.IB,2)}</td>
         <td ${cls}>${r.In}A ${r.curve}</td>
         <td ${cls}>${r.cores}×${r.S}</td>
         <td class="num" ${cls}>${nf(r.dU.pct,2)}</td>
+        <td style="font-size:11px" class="${r.okDisc?(r.magnetic?'':'muted'):''}">${r.okDisc?(r.magnetic?'μαγν.':'ΔΔΕ'):'✗'}</td>
         <td style="width:76px"><select ${bind('pan.'+idx+'.cir.'+ci+'.rcd')}><option value="0" ${+c.rcd===0?'selected':''}>—</option>${RCD_I.map(x=>`<option value="${x}" ${+c.rcd===x?'selected':''}>${x} mA</option>`).join('')}</select></td>
         <td><button class="btn sm danger" data-delcir="${p.id}|${c.id}">×</button></td></tr>`;}).join('')}
      </tbody></table></div>
@@ -1009,7 +1088,7 @@ function sldFop(){
   let g='';
   /* κεφαλή */
   g+=`<text x="24" y="26" class="ttl">ΜΟΝΟΓΡΑΜΜΙΚΟ — ${esc(S.fop.name)}</text>`;
-  g+=`<text x="24" y="42" class="sm">${esc(S.prj.title||'')} · ${esc(S.prj.dimos?'Δήμος '+S.prj.dimos:'')} · παροχή ${esc(S.prj.paroxi||'(νέα)')} · ${gr(S.doc.issue)}</text>`;
+  g+=`<text x="24" y="42" class="sm">${esc(S.prj.title||'')} · ${esc(S.prj.dimos?'Δήμος '+S.prj.dimos:'')} · παροχή ${esc(S.prj.paroxi||'(νέα)')} · σύστημα ${esc(S.prj.earth||'TN-C-S')} · ${gr(S.doc.issue)}</text>`;
   let y=80,x=70;
   g+=`<text x="24" y="${y-22}" class="lbl">ΔΙΚΤΥΟ ΔΕΔΔΗΕ ${p.ph===3?'3Φ+Ν 400/230V':'1Φ+Ν 230V'}</text>`;
   g+=`<path class="w" d="M24 ${y}h${x-24-14}"/>`+sv.meter(x,y);
@@ -1038,10 +1117,16 @@ function sldFop(){
   g+=`<path d="M${bx} ${yPE}h${bw}" stroke="#6EA82B" stroke-width="2.2" fill="none"/><text x="${bx-18}" y="${yPE+3.5}" class="sm">PE</text>`;
   g+=`<path class="w" d="M${bx+4} ${y}V190"/>`;
   g+=sv.earth(bx+40,yPE)+`<text x="${bx+52}" y="${yPE+16}" class="sm">γείωση πίλαρ ${S.fop.earth?esc(S.fop.earth)+' Ω':''}</text>`;
+  if((S.prj.earth||'TN-C-S')==='TN-C-S'){
+    g+=`<path class="wpe" style="stroke-dasharray:3 2" d="M${bx+16} ${yN}V${yPE}"/>`;
+    g+=`<text x="${bx+22}" y="${yN+9}" class="sm">PEN → N + PE</text>`;
+  }
   /* αναχωρήσεις */
   lines.forEach((c,i)=>{
     const cx=bx+95+i*185, top=yPE+8;
-    g+=`<path class="w" d="M${cx} ${top}v26"/>`;
+    g+=`<path class="w" d="M${cx} 190V${top+26}"/>`;
+    [0,1,2].slice(0,p.ph===3?3:1).forEach(q=>{g+=`<circle cx="${cx}" cy="${190+q*13}" r="1.9" fill="#111"/>`;});
+    g+=`<circle cx="${cx}" cy="${yN}" r="1.9" fill="#2F6FD0"/><circle cx="${cx}" cy="${yPE}" r="1.9" fill="#6EA82B"/>`;
     g+=sv.rcd(cx,top+40,'30mA');
     g+=`<path class="w" d="M${cx} ${top+53}v22"/>`;
     g+=sv.mcb(cx,top+88,`${c.In}A ${c.curve}`);
@@ -1060,7 +1145,7 @@ function sldFop(){
   });
   if(S.fop.spare){
     const cx=bx+95+lines.length*185, top=yPE+8;
-    g+=`<path class="w" style="stroke-dasharray:4 3" d="M${cx} ${top}v26"/>`+sv.mcb(cx,top+40,'εφεδρ.');
+    g+=`<path class="w" style="stroke-dasharray:4 3" d="M${cx} 190V${top+26}"/>`+sv.mcb(cx,top+40,'εφεδρ.');
     g+=`<text x="${cx-40}" y="${top+80}" class="sm">εφεδρική αναχώρηση (ανενεργή)</text>`;
   }
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${g}</svg>`;
@@ -1073,7 +1158,7 @@ function sldPanel(p){
   const ph=p.cir.some(c=>+c.ph===3)||L.dem>7?3:1;
   const feed=sizeLine({kW:L.dem,ph,L:+p.feedL||15,method:p.feedMethod||'B',amb:30,grp:1,dUlim:2,cosf:0.9,minS:2.5,curve:'C',Zsup:0.4});
   let g=`<text x="20" y="24" class="ttl">${esc(p.code)} — ${esc(p.name)}</text>
-   <text x="20" y="40" class="sm">${esc(S.prj.title||'')} · ζήτηση ${nf(L.dem,2)} kW · τροφοδοσία ${feed.cores}×${feed.S} mm² · ${gr(S.doc.issue)}</text>`;
+   <text x="20" y="40" class="sm">${esc(S.prj.title||'')} · εγκατ. ${nf(L.inst,2)} kW · ζήτηση ${nf(L.dem,2)} kW · ${feed.cores}×${feed.S} mm² · ${esc(S.prj.earth||'TN-C-S')} · ${gr(S.doc.issue)}</text>`;
   let x=60,y=84;
   const parent=p.parent?panelById(p.parent):null;
   g+=`<text x="20" y="${y-22}" class="lbl">${parent?'ΑΠΟ '+esc(parent.code):(paroxiById(S.sup.tier)?'ΠΑΡΟΧΗ '+paroxiById(S.sup.tier).lbl:'ΠΑΡΟΧΗ')}</text>`;
@@ -1092,12 +1177,17 @@ function sldPanel(p){
   g+=`<path d="M${bx} ${yN}h${bw}" stroke="#2F6FD0" stroke-width="2.2" fill="none"/><text x="${bx-20}" y="${yN+3.5}" class="sm">N</text>`;
   g+=`<path d="M${bx} ${yPE}h${bw}" stroke="#6EA82B" stroke-width="2.2" fill="none"/><text x="${bx-18}" y="${yPE+3.5}" class="sm">PE</text>`;
   g+=`<path class="w" d="M${bx+4} ${y}V170"/>`;
-  if(!parent)g+=sv.earth(bx+34,yPE)+`<text x="${bx+46}" y="${yPE+16}" class="sm">θεμελιακή γείωση</text>`;
+  if(!parent){g+=sv.earth(bx+34,yPE)+`<text x="${bx+46}" y="${yPE+16}" class="sm">θεμελιακή γείωση</text>`;
+    if((S.prj.earth||'TN-C-S')==='TN-C-S'){
+      g+=`<path class="wpe" style="stroke-dasharray:3 2" d="M${bx+14} ${yN}V${yPE}"/>`;
+      g+=`<text x="${bx+20}" y="${yN+9}" class="sm">PEN → N + PE</text>`;}}
   items.forEach((it,i)=>{
     const cx=bx+80+i*140, top=yPE+10;
     if(it.t==='c'){
       const c=it.c,r=it.r;
-      g+=`<path class="w" d="M${cx} ${top}v20"/>`;
+      g+=`<path class="w" d="M${cx} 170V${top+20}"/>`;
+      [0,1,2].slice(0,nph).forEach(q=>{g+=`<circle cx="${cx}" cy="${170+q*13}" r="1.9" fill="#111"/>`;});
+      g+=`<circle cx="${cx}" cy="${yN}" r="1.9" fill="#2F6FD0"/><circle cx="${cx}" cy="${yPE}" r="1.9" fill="#6EA82B"/>`;
       let yy=top+20;
       if(+c.rcd>0){g+=sv.rcd(cx,yy+13,c.rcd+'mA');yy+=32;g+=`<path class="w" d="M${cx} ${yy}v14"/>`;yy+=14;}
       g+=sv.mcb(cx,yy+13,`${r.In}A ${r.curve}`);yy+=32;
@@ -1107,7 +1197,7 @@ function sldPanel(p){
       g+=`<text x="${cx-56}" y="${yy+37}">${nf(c.kW,2)}kW · ${+c.ph===3?'3Φ':(c.phase||'L1')} · ΔU ${nf(r.dU.pct,1)}%</text>`;
     }else{
       const k=it.k,kl=panelLoad(k.id);
-      g+=`<path class="w" d="M${cx} ${top}v24"/>`+sv.mcb(cx,top+37,'')+`<path class="w" d="M${cx} ${top+50}v20"/>`;
+      g+=`<path class="w" d="M${cx} 170V${top+24}"/>`+sv.mcb(cx,top+37,'')+`<path class="w" d="M${cx} ${top+50}v20"/>`;
       g+=`<rect class="dev" x="${cx-46}" y="${top+70}" width="92" height="34" stroke-width="1.8"/>`;
       g+=`<text x="${cx-40}" y="${top+86}" class="lbl" style="font-weight:700">${esc(k.code)} ${esc(k.name).slice(0,14)}</text>`;
       g+=`<text x="${cx-40}" y="${top+98}">${nf(kl.dem,2)} kW · ${k.cir.length} γρ.</text>`;
@@ -1119,12 +1209,12 @@ function sldPanel(p){
 function sldTree(){
   const rs=roots();if(!rs.length)return '';
   const W=1000;let y=70,g=`<text x="20" y="26" class="ttl">ΓΕΝΙΚΟ ΔΙΑΓΡΑΜΜΑ ΔΙΑΝΟΜΗΣ</text>
-    <text x="20" y="42" class="sm">${esc(S.prj.title||'')} · σύνολο ${nf(totalLoad().dem,2)} kW</text>`;
+    <text x="20" y="42" class="sm">${esc(S.prj.title||'')} · εγκατεστημένη ${nf(totalLoad().inst,2)} kW · ζήτηση ${nf(totalLoad().dem,2)} kW</text>`;
   const draw=(p,x,depth)=>{
     const l=panelLoad(p.id);
     g+=`<rect class="dev" x="${x}" y="${y}" width="200" height="32" stroke-width="${depth===0?2:1.2}"/>
         <text x="${x+8}" y="${y+14}" class="lbl" style="font-weight:700">${esc(p.code)} ${esc(p.name).slice(0,20)}</text>
-        <text x="${x+8}" y="${y+26}">${nf(l.dem,2)} kW · ${p.cir.length} γραμμές</text>`;
+        <text x="${x+8}" y="${y+26}">εγκ. ${nf(l.inst,2)} · ζήτ. ${nf(l.dem,2)} kW · ${p.cir.length} γρ.</text>`;
     const my=y;y+=44;
     children(p.id).forEach(k=>{
       const ky=y;
@@ -1179,30 +1269,49 @@ function fillReference(){
     const zs=+(c.Zs*1.05).toFixed(2);
     return{k:c.key,rLL:'>200',rLN:'>200',rLPE:'>200',cont:(RHO_CU_H*c.L*2/Math.max(1.5,c.S)).toFixed(2),
       zs:zs.toFixed?zs.toFixed(2):zs, ik:Math.round(U0*0.95/zs),
-      rcdI:c.rcd?Math.round(c.rcd*0.7):'', rcdT:c.rcd?Math.round(18+Math.random()*10):'',
+      rcdI:c.rcd?Math.round(c.rcd*0.7):'', rcdT:c.rcd?(c.rcd>=300?38:24):'',
       pol:true,note:''};
   });
-  S.meas.earth=S.meas.earth||'3.5';
+  S.meas.earth=S.meas.earth||((S.prj.earth||'TN-C-S')==='TT'?'3.5':'1.2');
   S.meas.filled=true;S.meas.confirmed=false;
   VISUAL.forEach((v,i)=>{S.meas.vis['v'+i]=false;});
   render();touch();
 }
+/* Όρια ελέγχου. Το κρίσιμο σημείο: η απαίτηση για Zs εξαρτάται από το σύστημα
+   γείωσης και από την ύπαρξη ΔΔΕ (IEC 60364-4-41 §411.4 TN / §411.5 TT). */
 function limitOf(c,m){
-  const out=[];
-  const ins=v=>{const s=String(v||'').replace('>','');const n=parseFloat(s);return isNaN(n)?null:n;};
-  [['rLL','L-L'],['rLN','L-N'],['rLPE','L-PE']].forEach(([f,l])=>{
-    const v=ins(m[f]);if(v!==null&&v<1)out.push(l+' '+v+' MΩ < 1 MΩ');
+  const out=[], sys=S.prj.earth||'TN-C-S';
+  const ins=v=>{const s2=String(v||'').replace('>','');const n=parseFloat(s2);return isNaN(n)?null:n;};
+  [['rLL','L-L'],['rLN','L-N'],['rLPE','L-PE']].forEach(([fl,l])=>{
+    const v=ins(m[fl]);if(v!==null&&v<1)out.push('Μόνωση '+l+' '+v+' MΩ < 1 MΩ');
   });
-  const zs=parseFloat(m.zs);
-  if(!isNaN(zs)){
-    const Ia=c.In*CURVES[c.curve||'C'].k;
-    if(zs>U0/Ia)out.push('Zs '+zs+'Ω > '+nf(U0/Ia,2)+'Ω (δεν εξασφαλίζεται αποσύνδεση)');
+  const zs=parseFloat(m.zs), hasR=!!(c.rcd&&+c.rcd>0);
+  const Ia=c.In*(CURVES[c.curve||'C'].k), zsMax=U0/Ia;
+  if(sys==='TT'){
+    if(!hasR)out.push('TT χωρίς ΔΔΕ — δεν εξασφαλίζεται αυτόματη αποσύνδεση');
+  }else if(!isNaN(zs)&&!hasR&&zs>zsMax){
+    out.push('Zs '+zs+'Ω > '+nf(zsMax,2)+'Ω και χωρίς ΔΔΕ (δεν αποζεύγνυται ο '+c.In+'A '+c.curve+')');
   }
   const t=parseFloat(m.rcdT);
-  if(c.rcd&&!isNaN(t)&&t>300)out.push('ΔΔΕ '+t+' ms > 300 ms');
+  if(hasR&&!isNaN(t)&&t>300)out.push('ΔΔΕ '+t+' ms > 300 ms');
   const ri=parseFloat(m.rcdI);
-  if(c.rcd&&!isNaN(ri)&&ri>c.rcd)out.push('ΔΔΕ ρεύμα λειτ. '+ri+' mA > IΔn '+c.rcd+' mA');
+  if(hasR&&!isNaN(ri)&&ri>c.rcd)out.push('ΔΔΕ ρεύμα λειτ. '+ri+' mA > I∆n '+c.rcd+' mA');
   return out;
+}
+/* Όριο αντίστασης γείωσης.
+   TT : δεσμευτικό, R_A ≤ 50 V / I∆n.
+   TN : δεν υπάρχει τέτοια απαίτηση του Προτύπου για το τοπικό ηλεκτρόδιο — η
+        προστασία στηρίζεται στο Zs. Κρατάμε τιμή-στόχο (προδιαγραφή ΔΕΔΔΗΕ/μελέτης),
+        επεξεργάσιμη από τον χρήστη. */
+function earthLimit(){
+  const sys=S.prj.earth||'TN-C-S';
+  const man=parseFloat(S.meas.earthLim);
+  if(!isNaN(man)&&man>0)return{v:man,binding:sys==='TT',manual:true,sys};
+  if(sys==='TT'){
+    const i=(S.route.cat==='fop'?(S.fop.rcdHead||300):300)/1000;
+    return{v:50/i,binding:true,manual:false,sys};
+  }
+  return{v:(EARTH_SYS[sys]||{}).target||2,binding:false,manual:false,sys};
 }
 function measStatus(){
   const cs=allCircuits();let issues=0,empty=0;
@@ -1215,10 +1324,10 @@ function measStatus(){
 
 function vMeas(){
   const cs=allCircuits(), st=measStatus();
-  const earthLim=50/((S.route.cat==='fop'?(S.fop.rcdHead||300):300)/1000);
+  const EL=earthLimit(), sys=S.prj.earth||'TN-C-S';
   return shell(`
   <div class="hdr"><div class="eyebrow">Έλεγχος</div><h1>Οπτικός έλεγχος και μετρήσεις</h1>
-   <p>Τα όρια ελέγχονται ζωντανά. Οι τιμές μπαίνουν από το όργανο· η εφαρμογή μπορεί να προσυμπληρώσει τιμές αναφοράς για ταχύτητα, αλλά το έντυπο μένει προσχέδιο ώσπου να δηλώσεις ρητά ότι είναι πραγματικές.</p></div>
+   <p>Τα όρια ελέγχονται ζωντανά με βάση το σύστημα γείωσης <b>${esc(sys)}</b>. Οι τιμές μπαίνουν από το όργανο· η εφαρμογή μπορεί να προσυμπληρώσει τιμές αναφοράς για ταχύτητα, αλλά το έντυπο μένει προσχέδιο ώσπου να δηλώσεις ρητά ότι είναι πραγματικές.</p></div>
 
   <div class="reads" style="margin-bottom:14px">
    <div class="read"><div class="k">Κυκλώματα</div><div class="v">${st.n}</div></div>
@@ -1234,13 +1343,19 @@ function vMeas(){
   </div></div>
 
   <div class="card"><h3><span class="n">2</span>Γείωση & ισοδυναμικές συνδέσεις</h3><div class="body"><div class="grid g4">
+    <div class="f"><label>Σύστημα γείωσης</label>
+      <select ${bind('prj.earth')}>${Object.keys(EARTH_SYS).map(k=>`<option value="${k}" ${sys===k?'selected':''}>${EARTH_SYS[k].lbl}</option>`).join('')}</select></div>
     <div class="f"><label>Αντίσταση γείωσης R<sub>A</sub> (Ω)</label><input ${bind('meas.earth')} data-live="1"></div>
-    <div class="f"><label>Όριο (TT, R<sub>A</sub>·I∆n ≤ 50V)</label><input value="${nf(earthLim,1)}" disabled></div>
-    <div class="f"><label>Σύστημα γείωσης</label><input value="TT" disabled></div>
+    <div class="f"><label>Όριο / στόχος (Ω)</label><input ${bind('meas.earthLim')} data-live="1" placeholder="${nf(EL.v,1)}${EL.binding?' (δεσμευτικό)':' (στόχος)'}"></div>
     <div class="f"><label>Ημ/νία μετρήσεων</label><input type="date" ${bind('meas.cdate')}></div>
   </div>
-  ${S.meas.earth&&parseFloat(S.meas.earth)>earthLim?`<div class="note bad"><b>Εκτός ορίου</b>R<sub>A</sub>=${esc(S.meas.earth)} Ω > ${nf(earthLim,1)} Ω. Απαιτείται βελτίωση γείωσης ή ΔΔΕ μικρότερου I∆n.</div>`:
-    (S.meas.earth?`<div class="note ok" style="margin-bottom:0">R<sub>A</sub>=${esc(S.meas.earth)} Ω ≤ ${nf(earthLim,1)} Ω — η τάση επαφής παραμένει κάτω από 50 V.</div>`:'')}
+  ${S.meas.earth&&parseFloat(S.meas.earth)>EL.v
+    ? `<div class="note ${EL.binding?'bad':'warn'}"><b>${EL.binding?'Εκτός ορίου':'Πάνω από τον στόχο'}</b>
+        R<sub>A</sub>=${esc(S.meas.earth)} Ω > ${nf(EL.v,1)} Ω. ${EL.binding
+          ?'Στο TT η τάση επαφής ξεπερνά τα 50 V — απαιτείται βελτίωση γείωσης ή ΔΔΕ μικρότερου I∆n.'
+          :'Στο '+esc(sys)+' η προστασία δεν στηρίζεται σε αυτή την τιμή· ελέγχεται από το Z<sub>s</sub>. Η τιμή αφορά προδιαγραφή έργου/ΔΕΔΔΗΕ.'}</div>`
+    : (S.meas.earth?`<div class="note ok" style="margin-bottom:0">R<sub>A</sub>=${esc(S.meas.earth)} Ω ≤ ${nf(EL.v,1)} Ω.</div>`:'')}
+  <div class="note" style="margin-bottom:0"><b>${esc(sys)}</b>${EARTH_SYS[sys].fault}</div>
   </div></div>
 
   <div class="card"><h3><span class="n">3</span>Μετρήσεις ανά κύκλωμα<span class="sp"></span>
@@ -1311,7 +1426,9 @@ function docYDE(){
     <tr><td>Είδος εγκατάστασης: ${F(S.prj.useKind||(S.route.cat==='fop'?'Δημοτικός φωτισμός οδών':BT_L[S.route.btype]),180)}</td>
         <td>Είδος παροχής: ${F(p?p.lbl+' ('+p.kVA+' kVA)':'',170)}</td></tr>
     <tr><td>Συμφωνημένη ισχύς: ${F((S.sup.agreed||(p?p.kVA:''))+' kVA',90)}</td>
-        <td>Εγκατεστημένη ισχύς: ${F(nf(S.route.cat==='fop'?fopTotals().kW:totalLoad().inst,2)+' kW',90)}</td></tr></table>`)}
+        <td>Εγκατεστημένη ισχύς: ${F(nf(S.route.cat==='fop'?fopTotals().kW:totalLoad().inst,2)+' kW',90)}</td></tr>
+    <tr><td>Σύστημα γείωσης: ${F(S.prj.earth||'TN-C-S',90)}</td>
+        <td>Ζήτηση (ετεροχρονισμένη): ${F(nf(S.route.cat==='fop'?fopTotals().kW:totalLoad().dem,2)+' kW',90)}</td></tr></table>`)}
    ${box('4. Είδος δήλωσης',`
     <table class="n"><tr>
      <td>${ck(k==='new')} Νέα εγκατάσταση</td>
@@ -1343,13 +1460,28 @@ function docYDE(){
 
 /* ---------------- ΠΡΩΤΟΚΟΛΛΟ ΕΛΕΓΧΟΥ ---------------- */
 function docProt(){
-  const cs=allCircuits(), PER=34, pages=Math.max(1,Math.ceil(cs.length/PER));
+  const cs=allCircuits();
+  /* Χωρητικότητα σελίδας A4: η 1η φέρει τίτλο + στοιχεία + πίνακα οπτικού ελέγχου,
+     οι επόμενες μόνο τον πίνακα μετρήσεων. Το υποσέλιδο (όργανο/αποτέλεσμα/υπογραφή)
+     χρειάζεται ~10 σειρές χώρου· αν δεν χωρά, πηγαίνει σε δική του σελίδα. */
+  const PER1=22, PERN=40, FOOT=10;
+  const layout=[];
+  let rest=cs.length, first=true;
+  while(rest>0||layout.length===0){
+    const cap=first?PER1:PERN;
+    const take=Math.min(rest,cap);
+    layout.push(take); rest-=take; first=false;
+    if(rest<=0)break;
+  }
+  const lastCap=layout.length===1?PER1:PERN;
+  if(layout[layout.length-1]>lastCap-FOOT)layout.push(0);   /* υποσέλιδο σε νέα σελίδα */
+  const pages=layout.length;
   const head=`<div class="d-hdr"><div class="t1">ΠΡΩΤΟΚΟΛΛΟ ΕΛΕΓΧΟΥ ΗΛΕΚΤΡΙΚΗΣ ΕΓΚΑΤΑΣΤΑΣΗΣ</div>
     <div class="t2">κατά ΕΛΟΤ HD 384 / IEC 60364 — αρχικός &amp; περιοδικός έλεγχος</div></div>`;
   const idBox=`<div class="d-box"><div class="bb"><table class="n">
     <tr><td style="width:55%">Εγκατάσταση: ${F(S.prj.title,240)}</td><td>Αρ. παροχής: ${F(S.prj.paroxi,110)}</td></tr>
     <tr><td>Διεύθυνση: ${F(addrLine(),240)}</td><td>Ημερομηνία: ${F(gr(S.meas.cdate||S.doc.issue),90)}</td></tr>
-    <tr><td>Είδος ελέγχου: ${F(KIND_L[kindKey()],150)}</td><td>Σύστημα γείωσης: ${F('TT',50)} — U₀ = 230 V</td></tr>
+    <tr><td>Είδος ελέγχου: ${F(KIND_L[kindKey()],150)}</td><td>Σύστημα γείωσης: ${F(S.prj.earth||'TN-C-S',80)} — U₀ = 230 V</td></tr>
     </table></div></div>`;
   const vis=`<div class="d-box"><div class="bt">Α. Οπτικός έλεγχος (ΕΛΟΤ HD 384 — 61.2)</div><div class="bb">
     <table class="d"><tbody>${VISUAL.map((v,i)=>`<tr><td style="width:4%" class="c">${i+1}</td><td>${v}</td>
@@ -1380,16 +1512,18 @@ function docProt(){
     <th style="width:6%"><div class="vert">Χρόνος ∆∆Ε (ms)</div></th>
     <th style="width:5%"><div class="vert">Πολικότητα</div></th></tr>`;
   let out='';
+  let cursor=0;
   for(let pg=0;pg<pages;pg++){
-    const rows=cs.slice(pg*PER,(pg+1)*PER).map(c=>{const m=measRow(c.key);const bad=limitOf(c,m).length;
+    const slice=cs.slice(cursor,cursor+layout[pg]); cursor+=layout[pg];
+    const rows=slice.map(c=>{const m=measRow(c.key);const bad=limitOf(c,m).length;
       return `<tr><td class="c mono">${esc(c.key)}</td><td>${esc(c.name)}<span style="font-size:6.6pt;color:#444"> · ${esc(c.panel)}</span></td>
       <td class="c">${c.cores}×${c.S}</td><td class="c">${nf(c.L,0)}</td><td class="c">${c.In}/${c.curve}</td>
       <td class="c">${esc(m.rLL)}</td><td class="c">${esc(m.rLN)}</td><td class="c">${esc(m.rLPE)}</td>
       <td class="c">${esc(m.cont)}</td><td class="c"${bad?' style="font-weight:700"':''}>${esc(m.zs)}</td><td class="c">${esc(m.ik)}</td>
       <td class="c">${esc(m.rcdI)}</td><td class="c">${esc(m.rcdT)}</td><td class="c">${m.pol?'✓':''}</td></tr>`;}).join('');
     out+=`<div class="sheet">${draft()}${pg===0?head+idBox+vis:''}
-      <div class="d-box"><div class="bt">Β. Δοκιμές και μετρήσεις${pages>1?' (σελ. '+(pg+1)+' από '+pages+')':''}</div>
-      <div class="bb" style="padding:2px"><table class="d"><thead>${th}</thead><tbody>${rows}</tbody></table></div></div>
+      ${layout[pg]>0?`<div class="d-box"><div class="bt">Β. Δοκιμές και μετρήσεις${pages>1?' (σελ. '+(pg+1)+' από '+pages+')':''}</div>
+      <div class="bb" style="padding:2px"><table class="d"><thead>${th}</thead><tbody>${rows}</tbody></table></div></div>`:''}
       ${pg===pages-1?org+res+sign:''}
       <div class="pgno">Πρωτόκολλο ΕΛΟΤ HD 384 · ${esc(S.prj.paroxi||S.prj.title||'')} · σελ. ${pg+1}/${pages}</div></div>`;
   }
@@ -1422,11 +1556,16 @@ function docDeliv(){
       Στην κεφαλή: γενικός διακόπτης ${p?p.gen:''}A, ${S.fop.spd?'απαγωγός υπερτάσεων τύπου 2, ':''}διάταξη διαφορικού ρεύματος
       ${S.fop.rcdHead} mA τύπου S (επιλεκτική), ρελέ ισχύος με ${S.fop.astro?'αστρονομικό χρονοδιακόπτη':'χρονοδιακόπτη'}${S.fop.photo?' και φωτοκύτταρο':''}.
       Κάθε αναχώρηση προστατεύεται από διάταξη διαφορικού ρεύματος 30 mA και μικροαυτόματο καμπύλης B.
-      Οι ιστοί γειώνονται και συνδέονται ισοδυναμικά.`
-      :`${esc(BT_L[S.route.btype]||'Κτίριο')}. Η διανομή περιλαμβάνει ${S.pan.length}
+      Οι ιστοί γειώνονται και συνδέονται ισοδυναμικά. Σύστημα γείωσης ${esc(S.prj.earth||'TN-C-S')}.`
+      :`${esc(BT_L[S.route.btype]||'Κτίριο')}. Σύστημα γείωσης ${esc(S.prj.earth||'TN-C-S')}. Η διανομή περιλαμβάνει ${S.pan.length}
       ${S.pan.length===1?'πίνακα':'πίνακες'} (${roots().length} γενικό${roots().length>1?'ς':''} και ${S.pan.length-roots().length} υποπίνακες)
       με συνολικά ${S.pan.reduce((a,x)=>a+x.cir.length,0)} γραμμές. Όλες οι τελικές γραμμές προστατεύονται από διατάξεις
-      διαφορικού ρεύματος 30 mA, πλην των κυκλωμάτων φωτισμού ασφαλείας. Θεμελιακή γείωση με ισοδυναμικές συνδέσεις.`}
+      διαφορικού ρεύματος 30 mA, πλην των κυκλωμάτων φωτισμού ασφαλείας.
+      ${(S.prj.earth||'TN-C-S')==='TN-C-S'
+        ?'Ο αγωγός PEN της παροχής διαχωρίζεται σε ουδέτερο (N) και αγωγό προστασίας (PE) στον κύριο ζυγό γείωσης· οι ΔΔΕ τοποθετούνται κατάντη του σημείου διαχωρισμού.'
+        :((S.prj.earth==='TN-S')?'Χωριστοί αγωγοί PE και N σε όλο το μήκος της εγκατάστασης.'
+        :'Αυτόνομο ηλεκτρόδιο γείωσης· η προστασία έναντι έμμεσης επαφής εξασφαλίζεται από τις ΔΔΕ.')}
+      Θεμελιακή γείωση με κύριες ισοδυναμικές συνδέσεις.`}
    </div></div>
    <div class="d-box"><div class="bt">Β. Κυκλώματα</div><div class="bb" style="padding:2px">
      <table class="d"><thead><tr><th>Κωδ.</th><th>Κύκλωμα</th><th>${isFop?'Φωτιστικά':'Πίνακας'}</th><th>Μήκος</th>
@@ -1475,8 +1614,8 @@ function docEHE(){
      <td>Φάσεις: ${F(p?(p.ph===3?'3Φ+Ν 400/230V':'1Φ+Ν 230V'):'',90)}</td></tr>
      <tr><td>Ασφάλεια παροχής: ${F(p?p.fuse+' A':'',60)}</td><td>Γενικός: ${F(p?p.gen+' A':'',60)}</td>
      <td>Καλώδιο παροχής: ${F(p?p.cable:'',80)}</td></tr>
-     <tr><td colspan="3">Συντελεστής ετεροχρονισμού / ζήτηση: ${F(nf(isFop?fopTotals().kW:totalLoad().dem,2)+' kW',80)}
-       — cosφ ${F('0,95',40)}</td></tr></table></div></div>
+     <tr><td colspan="2">Συντελεστής ετεροχρονισμού / ζήτηση: ${F(nf(isFop?fopTotals().kW:totalLoad().dem,2)+' kW',80)} — cosφ ${F('0,95',40)}</td>
+       <td>Σύστημα γείωσης: ${F(S.prj.earth||'TN-C-S',90)}</td></tr></table></div></div>
    <div class="d-sign"><div>&nbsp;</div><div>${gr(S.doc.issue)}<br>Ο ΗΛΕΚΤΡΟΛΟΓΟΣ ΕΓΚΑΤΑΣΤΑΤΗΣ<div class="ln"></div>${esc(instName())}</div></div>
    <div class="pgno">Καταγραφή στοιχείων ΕΗΕ · ${esc(S.prj.title||'')}</div></div>`;
 }
@@ -1517,12 +1656,23 @@ const VIEWS={start:vStart,cat:vCat,insp:vInsp,prj:vPrj,fop:vFop,bld:vBld,sup:vSu
 function render(){
   const a=document.activeElement;
   const key=a&&a.dataset?(a.dataset.b||(a.dataset.m?'m:'+a.dataset.m:null)):null;
-  let ss=null,se=null;try{ss=a.selectionStart;se=a.selectionEnd;}catch(e){}
+  let ss=null,se=null,raw=null,sel=false;
+  if(key&&a){
+    raw=a.value;
+    sel=(a.tagName==='INPUT'&&['text','search','url','tel','password'].indexOf(a.type)>=0);
+    if(sel){try{ss=a.selectionStart;se=a.selectionEnd;}catch(e){}}
+  }
   document.getElementById('app').innerHTML=(VIEWS[VIEW]||vStart)();
   if(key){
     const el=key.slice(0,2)==='m:'?document.querySelector('[data-m="'+key.slice(2)+'"]')
                                   :document.querySelector('[data-b="'+key+'"]');
-    if(el){el.focus();if(ss!=null){try{el.setSelectionRange(ss,se);}catch(e){}}}
+    if(el){
+      el.focus();
+      /* Κρατάμε αυτούσιο ό,τι πληκτρολογεί ο χρήστης (π.χ. «1,» ή «0.») ώστε να
+         μη «διορθώνεται» το πεδίο στη μέση της πληκτρολόγησης. */
+      if(raw!=null&&el.tagName==='INPUT'&&el.type!=='checkbox'&&el.value!==raw){try{el.value=raw;}catch(e){}}
+      if(sel&&ss!=null){try{el.setSelectionRange(ss,se);}catch(e){}}
+    }
   }
 }
 
@@ -1633,7 +1783,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&MODAL)closeModal();
 /* ---- εκκίνηση (καλείται από το στρώμα ταυτότητας μετά την είσοδο) ---- */
 async function startApp(){
   const cur=await DB.get('yde5:current');
-  if(cur&&cur.v)S=Object.assign(blank(),cur);
+  if(cur&&cur.v)S=migrate(cur);
   const i=await DB.get('yde5:inst'); if(i&&!S.inst.ep)S.inst=Object.assign(S.inst,i);
   const o=await DB.get('yde5:org');  if(o&&!S.org.serial)S.org=Object.assign(S.org,o);
   if(!S.route.mode)VIEW='start';
@@ -1643,5 +1793,6 @@ window.startApp=startApp;
 
 /* ---- δημόσια επιφάνεια (έλεγχος/επαλήθευση υπολογισμών από κονσόλα) ---- */
 window.YDE={PAROXES,IZ,S_LIST,METHODS,K_TEMP,K_GROUP,MCB,CURVES,RCD_I,EPAN,TPL,LOADS,VISUAL,FOP_LAMP,
-  izOf,izParoxi,ib,pickMCB,du,duDistributed,loop,disconnectOK,sizeLine,pickParoxi,paroxiById,auditParoxi,
+  izOf,izParoxi,ib,pickMCB,du,duDistributed,loop,disconnectOK,discCheck,sizeLine,pickParoxi,paroxiById,auditParoxi,
+  panelLoad,totalLoad,earthLimit,limitOf,EARTH_SYS,
   get state(){return S;}};

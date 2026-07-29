@@ -70,7 +70,7 @@
     const {data:prof,error}=await sb.rpc('yde_touch_login');
     const p=Array.isArray(prof)?prof[0]:prof;
     if(error){await sb.auth.signOut();return showLogin('Σφάλμα σύνδεσης: '+error.message,'bad');}
-    if(!p){await sb.auth.signOut();return showLogin('Ο λογαριασμός σου δεν έχει πρόσβαση στην εφαρμογή ΥΔΕ. Ζήτησε από τον διαχειριστή να σε προσθέσει.','bad');}
+    if(!p||!p.id){await sb.auth.signOut();return showLogin('Ο λογαριασμός σου δεν έχει πρόσβαση στην εφαρμογή ΥΔΕ. Ζήτησε από τον διαχειριστή να σε προσθέσει.','bad');}
     if(p.status!=='active'){await sb.auth.signOut();return showLogin(p.status==='pending'?'Ο λογαριασμός σου αναμένει έγκριση από τον διαχειριστή.':'Ο λογαριασμός σου είναι απενεργοποιημένος. Επικοινώνησε με τον διαχειριστή.','bad');}
     const {data:u}=await sb.auth.getUser();
     window.YDE_USER={id:p.id,email:p.email||(u&&u.user&&u.user.email),name:p.full_name,role:p.role,last:p.last_sign_in};
